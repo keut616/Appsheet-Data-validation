@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="lo">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>精密検査ツール - ワークシート自動検証システム</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- SheetJS ສຳລັບການອ່ານໄຟລ໌ເຂົ້າ -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <!-- ExcelJS ສຳລັບການຂຽນໄຟລ໌ອອກ ເພື່ອໃຫ້ໄດ້ "Table Design" ແລະ ການຈັດວາງຫຼາຍ Sheets ທີ່ສົມບູນ -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Lao:wght@300;400;500;600;700&family=Noto+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            background-color: #f0fdf4; 
+            font-family: 'Noto Sans Lao', 'Noto Sans', sans-serif; 
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="bg-white p-8 rounded-xl shadow-2xl max-w-lg w-full text-center border-t-4 border-green-600">
+        
+        <div class="mb-6 flex justify-center text-6xl">
+            📋
+        </div>
+
+        <h1 class="text-2xl font-bold text-gray-800 mb-6">ໂປຣແກຣມກວດຂໍ້ມູນປະຈຳເດືອນ</h1>
+
+        <div class="mb-6">
+            <label class="block text-left text-sm font-medium text-gray-700 mb-2">1. ເລືອກໄຟລ໌ຂໍ້ມູນ (CSV ຫຼື Excel)</label>
+            <input type="file" id="fileInput" accept=".csv, .xlsx" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 border border-gray-300 rounded-md p-1">
+        </div>
+
+        <button id="processBtn" onclick="processExcel()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors flex justify-center items-center gap-2 mb-4">
+            📥 2. ປະມວນຜົນ ແລະ ດາວໂຫຼດ Excel
+        </button>
+
+        <!-- ກ່ອງລາຍງານຜົນສະຫຼຸບການກວດສອບຄວາມຖືກຕ້ອງ (Summary Dashboard) -->
+        <div id="summaryReport" class="mt-4 text-left text-sm bg-blue-50 p-5 rounded-lg border border-blue-200 hidden">
+            <h3 class="font-bold text-blue-900 mb-3 flex items-center gap-1.5">
+                📊 ຜົນການວິເຄາະ ແລະ ກວດສອບຂໍ້ມູນ:
+            </h3>
+            <ul class="space-y-2 text-gray-700">
+                <li class="flex justify-between border-b border-blue-100 pb-1.5">
+                    <span>🔹 ຈຳນວນຂໍ້ມູນເດືອນ 4/2026 ທັງໝົດ:</span>
+                    <span id="totalRows" class="font-bold text-blue-800">0 ແຖວ</span>
+                </li>
+                <li class="flex justify-between border-b border-blue-100 pb-1.5 bg-green-50 px-2 py-1 rounded">
+                    <span class="text-green-800 font-medium">✅ ຊື່ຊໍ້າ ແຕ່ເຂົ້າຮ່ວມຕ່າງສະຖານທີ່ (Valid):</span>
+                    <span id="validMulti" class="font-bold text-green-700">0 ຄົນ</span>
+                </li>
+                <li class="flex justify-between border-b border-blue-100 pb-1.5 bg-red-50 px-2 py-1 rounded">
+                    <span class="text-red-800 font-medium">❌ ຂໍ້ມູນຊໍ້າຊ້ອນ (Error - ກິດຈະກໍາດຽວກັນ):</span>
+                    <span id="errorDup" class="font-bold text-red-600">0 ແຖວ</span>
+                </li>
+                <li class="flex justify-between">
+                    <span>ℹ️ ຊື່ບໍ່ຊໍ້າກັນ (Valid Single):</span>
+                    <span id="otherValid" class="font-bold text-gray-600">0 ຄົນ</span>
+                </li>
+            </ul>
+        </div>
+
+        <div id="statusMsg" class="mt-4 text-sm font-medium hidden"></div>
+    </div>
+
+    <script>
+        function formatDate(dateStr) {
+            if (!dateStr) return "";
+            dateStr = dateStr.toString();
+            if (dateStr.includes('-')) {
+                let parts = dateStr.split('-');
+                if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+            } else if (dateStr.includes('/')) {
+                let parts = dateStr.split('/');
+                if (parts.length === 3) {
+                    let m = parts[0].padStart(2, '0');
+                    let d = parts[1].padStart(2, '0');
+                    let y = parts[2];
+                    return `${d}/${m}/${y}`;
+                }
+            }
+            return dateStr;
+        }
+
+        // ຟັງຊັນອະນາໄມຊື່ຫົວຄໍລຳເພື່ອປ້ອງກັນ Excel Error ແບບເຂັ້ມງວດທີ່ສຸດ
+        function sanitizeColumnName(name, index) {
+            if (!name) return `Column_${index + 1}`;
+            let clean = name.toString()
+                .replace(/[\r\n\t]/g, "")
+                .replace(/[#\[\]*'?\:\\\/()]/g, "_")
+                .replace(/\s+/g, " ")
+                .trim();
+            
+            if (!clean) return `Column_${index + 1}`;
+            if (/^\d/.test(clean)) {
+                clean = "Col_" + clean;
+            }
+            if (/^[a-zA-Z]+\d+$/.test(clean)) {
+                clean = "Col_" + clean;
+            }
+            return clean.substring(0, 255);
+        }
+
+        // ຟັງຊັນອະນາໄມຊື່ Sheet ປ້ອງກັນຕົວອັກສອນພິເສດ ແລະ ຄວາມຍາວເກີນ 31 ຕົວ
+        function sanitizeSheetName(name) {
+            if (!name) return "Sheet";
+            return name.toString()
+                .replace(/[\\\/\?\*\:\[\]]/g, "_")
+                .substring(0, 31);
+        }
+
+        function processExcel() {
+            const fileInput = document.getElementById('fileInput');
+            const statusMsg = document.getElementById('statusMsg');
+            const summaryReport = document.getElementById('summaryReport');
+
+            if (!fileInput.files.length) {
+                statusMsg.textContent = "ກະລຸນາເລືອກໄຟລ໌ກ່ອນ!";
+                statusMsg.className = "mt-4 text-sm font-medium text-red-600 block";
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            statusMsg.textContent = "ກຳລັງກວດສອບ ແລະ ປະມວນຜົນ (ລໍຖ້າຈັກໜ່ອຍ)...";
+            statusMsg.className = "mt-4 text-sm font-medium text-blue-600 block";
+            summaryReport.classList.add('hidden');
+
+            reader.onload = async function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, {raw: false, defval: ""});
+
+                    let originalSheetName = firstSheetName;
+                    if (file.name.toLowerCase().endsWith('.csv')) {
+                        originalSheetName = file.name.replace(/\.csv$/i, '');
+                    }
+                    originalSheetName = sanitizeSheetName(originalSheetName);
+
+                    // --- ກັ່ນຕອງເດືອນ ---
+                    let currentMonthSheetName = "Apr-2026";
+                    let filteredData = jsonData.filter(row => {
+                        const startDate = (row['Event Start date (Virtual)'] || "").toString();
+                        let isCurrentMonth = startDate.includes('2026') && 
+                                             (startDate.includes('-04-') || startDate.includes('/04/') || 
+                                              startDate.startsWith('4/') || startDate.startsWith('04/'));
+                        return isCurrentMonth;
+                    });
+                    
+                    if(filteredData.length === 0) {
+                        filteredData = jsonData; 
+                    }
+
+                    // --- ການກວດສອບຊື່ຊໍ້າຕາມເງື່ອນໄຂ Findname ---
+                    let findnameGroups = {};
+                    filteredData.forEach(row => {
+                        let fn = row['Findname'];
+                        if (fn) {
+                            if(!findnameGroups[fn]) findnameGroups[fn] = [];
+                            findnameGroups[fn].push(row);
+                        }
+                    });
+
+                    let errorCount = 0;
+                    let validMultiCount = 0;
+                    let validSingleCount = 0;
+                    let otherValidCount = 0;
+
+                    // --- ສ້າງຖັນ Index ຕາມລຳດັບເດີມ (1,2,3...) ແລະ ຖັນ Rand ກ່ອນການສຸ່ມ! ---
+                    let mappedData = filteredData.map((rowA, index) => {
+                        let newRow = {};
+                        
+                        Object.keys(rowA).forEach(k => {
+                            let kl = k.trim().toLowerCase();
+                            if(kl !== 'index' && kl !== 'rand' && kl !== 'randome') {
+                                let val = rowA[k];
+                                if(k === 'Event Start date (Virtual)' || k === 'Event End date (Virtual)') {
+                                    val = formatDate(val); 
+                                }
+                                newRow[k] = val;
+                            }
+                        });
+
+                        let fnA = rowA['Findname'];
+                        let hasDuplicateName = false;
+                        let isRealError = false;
+                        let isValidMultiEvent = false;
+
+                        filteredData.forEach(rowB => {
+                            if (rowA !== rowB && rowB['Findname'] === fnA) {
+                                hasDuplicateName = true;
+                                
+                                const idA = (rowA['Participant ID'] || "").toString().trim();
+                                const idB = (rowB['Participant ID'] || "").toString().trim();
+                                
+                                const orgA = (rowA['Participant Organization Name (Virtual)'] || "").toString().trim().toLowerCase();
+                                const orgB = (rowB['Participant Organization Name (Virtual)'] || "").toString().trim().toLowerCase();
+                                
+                                const taskA = (rowA['Participant Responsible task/unit (Virtual)'] || "").toString().trim().toLowerCase();
+                                const taskB = (rowB['Participant Responsible task/unit (Virtual)'] || "").toString().trim().toLowerCase();
+                                
+                                const locA = (rowA['Event location (Virtual)'] || "").toString().trim().toLowerCase();
+                                const locB = (rowB['Event location (Virtual)'] || "").toString().trim().toLowerCase();
+
+                                if (idA === idB && idA !== "" && orgA === orgB && taskA === taskB) {
+                                    if (locA === locB) {
+                                        isRealError = true;
+                                    } else {
+                                        isValidMultiEvent = true;
+                                    }
+                                }
+                            }
+                        });
+
+                        // ປ່ຽນຂໍ້ຄວາມ Auditor Validation ເປັນພາສາອັງກິດທັງໝົດ
+                        if (!hasDuplicateName) {
+                            newRow['Auditor Validation'] = "Valid: Unique Name";
+                            validSingleCount++;
+                        } else if (isRealError) {
+                            newRow['Auditor Validation'] = "Error: Duplicate Registration (Same Event Location)";
+                            errorCount++;
+                        } else if (isValidMultiEvent) {
+                            newRow['Auditor Validation'] = "Valid: Duplicate Name but Different Event Location";
+                            validMultiCount++;
+                        } else {
+                            newRow['Auditor Validation'] = "Valid: Different Participant (Data Discrepancy)";
+                            otherValidCount++;
+                        }
+                        
+                        newRow['Index'] = index + 1;
+                        newRow['Rand'] = Math.random();
+                        
+                        return newRow;
+                    });
+
+                    // ຈັດລຽງ A-Z ຕາມ Rand (ເຮັດໃຫ້ເລກ Index ສະຫຼັບກັນແບບສຸ່ມ)
+                    mappedData.sort((a, b) => a['Rand'] - b['Rand']);
+                    let finalData = mappedData;
+
+                    // ສະແດງຜົນສະຫຼຸບເທິງ Dashboard
+                    const actualErrors = Math.ceil(errorCount / 2);
+                    const totalValidSingle = validSingleCount + otherValidCount;
+                    
+                    document.getElementById('totalRows').textContent = finalData.length + " ແຖວ";
+                    document.getElementById('validMulti').textContent = validMultiCount + " ຄົນ";
+                    document.getElementById('errorDup').textContent = actualErrors + " ບ່ອນ";
+                    document.getElementById('otherValid').textContent = totalValidSingle + " ຄົນ";
+                    summaryReport.classList.remove('hidden');
+
+                    // -------------------------------------------------------------
+                    // ເລີ່ມໃຊ້ ExcelJS ໃນການຂຽນໄຟລ໌
+                    // -------------------------------------------------------------
+                    const newWb = new ExcelJS.Workbook();
+                    
+                    // 1. ສ້າງ Sheet ຕົ້ນສະບັບ (Original)
+                    const wsOriginal = newWb.addWorksheet(originalSheetName);
+                    const rawAoA = XLSX.utils.sheet_to_json(worksheet, {header: 1, raw: false, defval: ""});
+                    wsOriginal.addRows(rawAoA);
+
+                    // 2. ສ້າງ Sheet ເດືອນປັດຈຸບັນ (Apr-2026)
+                    const wsApr = newWb.addWorksheet(currentMonthSheetName);
+                    
+                    let columns = [];
+                    let rows = [];
+                    let headers = [];
+
+                    if (finalData.length > 0) {
+                        headers = Object.keys(finalData[0]);
+                        
+                        let seenHeaders = {};
+                        columns = headers.map((h, i) => {
+                            let colName = sanitizeColumnName(h || `Column_${i+1}`, i);
+                            if (seenHeaders[colName]) {
+                                let count = 1;
+                                while(seenHeaders[`${colName}_${count}`]) count++;
+                                colName = `${colName}_${count}`;
+                            }
+                            seenHeaders[colName] = true;
+                            return { name: colName };
+                        });
+
+                        rows = finalData.map(row => headers.map(h => {
+                            const val = row[h];
+                            if (val === undefined || val === null) return "";
+                            if (typeof val === 'object') return JSON.stringify(val);
+                            return val;
+                        }));
+
+                        // ສ້າງ Table ໃນ Sheet "Apr-2026"
+                        wsApr.addTable({
+                            name: 'Table_Apr_2026',
+                            ref: 'A1',
+                            headerRow: true,
+                            style: {
+                                theme: 'TableStyleMedium2',
+                                showRowStripes: true,
+                            },
+                            columns: columns,
+                            rows: rows
+                        });
+
+                        // ທາສີພື້ນຫຼັງໃຫ້ແຕ່ລະຫ້ອງໂດຍກົງໃນ Sheet "Apr-2026"
+                        const validationColIndex = headers.findIndex(h => h === 'Auditor Validation');
+                        const findnameIndex = headers.findIndex(h => h && h.trim().toLowerCase() === 'findname');
+
+                        wsApr.eachRow((row, rowNum) => {
+                            if (rowNum > 1) {
+                                if (validationColIndex !== -1) {
+                                    const cell = row.getCell(validationColIndex + 1);
+                                    const val = cell.value ? cell.value.toString() : "";
+                                    if (val.includes("Error")) {
+                                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
+                                        cell.font = { color: { argb: 'FF9C0006' }, bold: true, name: 'Noto Sans Lao' };
+                                    } else if (val.includes("Valid")) {
+                                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6EFCE' } };
+                                        cell.font = { color: { argb: 'FF006100' }, name: 'Noto Sans Lao' };
+                                    }
+                                }
+                                if (findnameIndex !== -1) {
+                                    const cell = row.getCell(findnameIndex + 1);
+                                    const val = cell.value ? cell.value.toString() : "";
+                                    if (val && findnameGroups[val] && findnameGroups[val].length > 1) {
+                                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
+                                        cell.font = { color: { argb: 'FF9C0006' }, bold: true, name: 'Noto Sans Lao' };
+                                    }
+                                }
+                            }
+                        });
+                        
+                        // ຕັ້ງຄວາມກວ້າງຖັນໃຫ້ອ່ານງ່າຍ
+                        wsApr.columns.forEach(col => col.width = 20);
+                    }
+
+                    // 3. ສ້າງ Sheet "Result" 
+                    // (ສຳເນົາຂໍ້ມູນທັງໝົດມາຈາກ Apr-2026 ພ້ອມເພີ່ມບລັອກສະຫຼຸບຜົນ ແລະ ສະຖິຕິພາສາອັງກິດໄວ້ທາງເທິງສຸດ)
+                    const wsResult = newWb.addWorksheet("Result");
+                    
+                    // --- ກຽມບລັອກສະຫຼຸບຜົນການກວດສອບ (ແຖວທີ 1-6) ---
+                    wsResult.addRow([]); // ແຖວທີ 1 (ຫວ່າງ)
+                    
+                    // ປ່ຽນ Rows A2:A8 ເປັນພາສາອັງກິດຕາມເງື່ອນໄຂ
+                    const rHeader = wsResult.addRow(["Audit Result Summary"]); // ແຖວທີ 2
+                    rHeader.getCell(1).font = { name: 'Noto Sans', size: 16, bold: true, color: { argb: 'FF1E3A8A' } };
+                    
+                    // 🔹 ຈຳນວນຂໍ້ມູນເດືອນ 4/2026 ທັງໝົດ ➔ 🔹 Total Records (April 2026):
+                    const rowTotal = wsResult.addRow(["🔹 Total Records (April 2026):", `${finalData.length} Rows`]); // ແຖວທີ 3
+                    rowTotal.getCell(1).font = { name: 'Noto Sans', bold: true, color: { argb: 'FF1E293B' } };
+                    rowTotal.getCell(2).font = { name: 'Noto Sans', bold: true, color: { argb: 'FF1E293B' } };
+                    
+                    // ✅ ຊື່ຊໍ້າ ແຕ່ເຂົ້າຮ່ວມຕ່າງສະຖານທີ່ (Valid) ➔ ✅ Duplicate Name but Different Event Location (Valid):
+                    const rowValidMulti = wsResult.addRow(["✅ Duplicate Name but Different Event Location (Valid):", `${validMultiCount} Participants`]); // ແຖວທີ 4
+                    rowValidMulti.getCell(1).font = { name: 'Noto Sans', bold: true, color: { argb: 'FF006100' } };
+                    rowValidMulti.getCell(2).font = { name: 'Noto Sans', bold: true, color: { argb: 'FF006100' } };
+                    rowValidMulti.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6EFCE' } };
+                    rowValidMulti.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6EFCE' } };
+
+                    // ❌ ຂໍ້ມູນຊໍ້າຊ້ອນ (Error - ກິດຈະກໍາດຽວກັນ) ➔ ❌ Duplicate Registration (Error - Same Activity):
+                    const rowErrorDup = wsResult.addRow(["❌ Duplicate Registration (Error - Same Activity):", `${actualErrors} Locations`]); // ແຖວທີ 5
+                    rowErrorDup.getCell(1).font = { name: 'Noto Sans', bold: true, color: { argb: 'FF9C0006' } };
+                    rowErrorDup.getCell(2).font = { name: 'Noto Sans', bold: true, color: { argb: 'FF9C0006' } };
+                    rowErrorDup.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
+                    rowErrorDup.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
+
+                    // ℹ️ ຊື່ບໍ່ຊໍ້າກັນ (Valid Single) ➔ ℹ️ Unique Names (Valid Single):
+                    const rowValidSingle = wsResult.addRow(["ℹ️ Unique Names (Valid Single):", `${totalValidSingle} Participants`]); // ແຖວທີ 6
+                    rowValidSingle.getCell(1).font = { name: 'Noto Sans', bold: true, color: { argb: 'FF475569' } };
+                    rowValidSingle.getCell(2).font = { name: 'Noto Sans', bold: true, color: { argb: 'FF475569' } };
+
+                    wsResult.addRow([]); // ແຖວທີ 7 (ຫວ່າງ)
+                    
+                    // ຂໍ້ມູນທີ່ຜ່ານການກວດສອບແລ້ວ (Audited Data Table) ➔ Audited Data Table
+                    const rTableTitle = wsResult.addRow(["Audited Data Table"]); // ແຖວທີ 8
+                    rTableTitle.getCell(1).font = { name: 'Noto Sans', size: 12, bold: true, color: { argb: 'FF0D9488' } };
+                    wsResult.addRow([]); // ແຖວທີ 9 (ຫວ່າງ)
+
+                    // ເລີ່ມສ້າງ Table ສຳເນົາຂໍ້ມູນ ໄວ້ຕັ້ງແຕ່ແຖວທີ 10 ເປັນຕົ້ນໄປ
+                    const tableStartRow = 10;
+                    if (finalData.length > 0) {
+                        wsResult.addTable({
+                            name: 'Table_Result',
+                            ref: `A${tableStartRow}`,
+                            headerRow: true,
+                            style: {
+                                theme: 'TableStyleMedium2',
+                                showRowStripes: true,
+                            },
+                            columns: columns,
+                            rows: rows
+                        });
+
+                        const validationColIndex = headers.findIndex(h => h === 'Auditor Validation');
+                        const findnameIndex = headers.findIndex(h => h && h.trim().toLowerCase() === 'findname');
+
+                        // ທາສີພື້ນຫຼັງໃຫ້ກັບຕາຕະລາງໃນ Sheet Result ໂດຍກົງ (ເລີ່ມກວດແຖວທີ 11)
+                        wsResult.eachRow((row, rowNum) => {
+                            if (rowNum > tableStartRow) { // ພາຍໃຕ້ຫົວຕາຕະລາງ
+                                if (validationColIndex !== -1) {
+                                    const cell = row.getCell(validationColIndex + 1);
+                                    const val = cell.value ? cell.value.toString() : "";
+                                    if (val.includes("Error")) {
+                                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
+                                        cell.font = { color: { argb: 'FF9C0006' }, bold: true, name: 'Noto Sans Lao' };
+                                    } else if (val.includes("Valid")) {
+                                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6EFCE' } };
+                                        cell.font = { color: { argb: 'FF006100' }, name: 'Noto Sans Lao' };
+                                    }
+                                }
+                                if (findnameIndex !== -1) {
+                                    const cell = row.getCell(findnameIndex + 1);
+                                    const val = cell.value ? cell.value.toString() : "";
+                                    if (val && findnameGroups[val] && findnameGroups[val].length > 1) {
+                                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
+                                        cell.font = { color: { argb: 'FF9C0006' }, bold: true, name: 'Noto Sans Lao' };
+                                    }
+                                }
+                            }
+                        });
+
+                        // ຕັ້ງຄວາມກວ້າງຖັນໃຫ້ສວຍງາມໃນ Sheet Result
+                        wsResult.columns.forEach(col => col.width = 20);
+                        wsResult.getColumn(1).width = 45; // ຕັ້ງຖັນທຳອິດໃຫ້ກວ້າງກວ່າໝູ່ ເພື່ອບໍ່ໃຫ້ບົດສະຫຼຸບລົ້ນຫ້ອງ
+                    }
+
+                    // ສົ່ງອອກເປັນໄຟລ໌ Excel ທີ່ສົມບູນ
+                    let exportFileName = "Audited_" + file.name.replace(/\.csv$/i, '.xlsx');
+                    
+                    const buffer = await newWb.xlsx.writeBuffer();
+                    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+                    const link = document.createElement('a');
+                    link.href = window.URL.createObjectURL(blob);
+                    link.download = exportFileName;
+                    link.click();
+                    window.URL.revokeObjectURL(link.href);
+
+                    statusMsg.textContent = "ກວດສອບສຳເລັດ! ດາວໂຫຼດໄຟລ໌ Excel ແລ້ວ.";
+                    statusMsg.className = "mt-4 text-sm font-bold text-green-600 block";
+                } catch (error) {
+                    console.error(error);
+                    statusMsg.textContent = "ເກີດຂໍ້ຜິດພາດໃນການສ້າງໄຟລ໌ Excel ກະລຸນາລອງໃໝ່.";
+                    statusMsg.className = "mt-4 text-sm font-medium text-red-600 block";
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+    </script>
+</body>
+</html>
