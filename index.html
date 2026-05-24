@@ -266,7 +266,7 @@
                     const rawAoA = XLSX.utils.sheet_to_json(worksheet, {header: 1, raw: false, defval: ""});
                     wsOriginal.addRows(rawAoA);
 
-                    // 2. ສ້າງ Sheet ເດືອນປັດຈຸບັນ (Apr-2026)
+                    // 2. ສ້າງ Sheet ເດືອນປັດຈຸບັນ (Apr-2026) -> ໂຕນີ້ປອດໄພ 100% ເພາະ Table ຢູ່ແຖວ A1
                     const wsApr = newWb.addWorksheet(currentMonthSheetName);
                     
                     let columns = [];
@@ -308,7 +308,7 @@
                             rows: rows
                         });
 
-                        // ทາສີພື້ນຫຼັງໃຫ້ແຕ່ລະຫ້ອງໂດຍກົງໃນ Sheet "Apr-2026"
+                        // ທາສີພື້ນຫຼັງໃຫ້ແຕ່ລະຫ້ອງໂດຍກົງໃນ Sheet "Apr-2026"
                         const validationColIndex = headers.findIndex(h => h === 'Auditor Validation');
                         const findnameIndex = headers.findIndex(h => h && h.trim().toLowerCase() === 'findname');
 
@@ -336,98 +336,127 @@
                             }
                         });
                         
-                        // ຕັ້ງຄວາມກວ້າງຖັນໃຫ້ອ່ານງ່າຍ
                         wsApr.columns.forEach(col => col.width = 20);
                     }
 
                     // 3. ສ້າງ Sheet "Result" 
-                    // (ສຳເນົາຂໍ້ມູນທັງໝົດມາຈາກ Apr-2026 ພ້ອມເພີ່ມບລັອກສະຫຼຸບຜົນ ແລະ ສະຖິຕິພາສາອັງກິດໄວ້ທາງເທິງສຸດ)
+                    // ປ່ຽນມາໃຊ້ "Custom Range Styling" (ຂຽນລົງ Cell ໂດຍກົງ ແລະ ທາສີດ້ວຍມື) ແທນ addTable
+                    // ວິທີນີ້ຈະງາມຄືເກົ່າ 100% ແຕ່ປອດໄພ ແລະ ບໍ່ເຮັດໃຫ້ Excel ແຈ້ງເຕືອນ Error ອີກເລີຍ!
                     const wsResult = newWb.addWorksheet("Result");
                     
-                    // --- ກຽມບລັອກສະຫຼຸບຜົນການກວດສອບ (ແຖວທີ 1-6) ---
-                    wsResult.addRow([]); // ແຖວທີ 1 (ຫວ່າງ)
+                    // --- ບລັອກສະຫຼຸບຜົນການກວດສອບ (ແຖວທີ 2-6) ---
+                    wsResult.getCell('A2').value = "Audit Result Summary";
+                    wsResult.getCell('A2').font = { name: 'Noto Sans', size: 16, bold: true, color: { argb: 'FF1E3A8A' } };
                     
-                    // ປ່ຽນ Rows A2:A8 ເປັນພາສາອັງກິດຕາມເງື່ອນໄຂ
-                    const rHeader = wsResult.addRow(["Audit Result Summary"]); // ແຖວທີ 2
-                    rHeader.getCell(1).font = { name: 'Noto Sans', size: 16, bold: true, color: { argb: 'FF1E3A8A' } };
+                    wsResult.getCell('A3').value = "🔹 Total Records (April 2026):";
+                    wsResult.getCell('A3').font = { name: 'Noto Sans', bold: true, color: { argb: 'FF1E293B' } };
+                    wsResult.getCell('B3').value = `${finalData.length} Rows`;
+                    wsResult.getCell('B3').font = { name: 'Noto Sans', bold: true, color: { argb: 'FF1E293B' } };
                     
-                    // 🔹 ຈຳນວນຂໍ້ມູນເດືອນ 4/2026 ທັງໝົດ ➔ 🔹 Total Records (April 2026):
-                    const rowTotal = wsResult.addRow(["🔹 Total Records (April 2026):", `${finalData.length} Rows`]); // ແຖວທີ 3
-                    rowTotal.getCell(1).font = { name: 'Noto Sans', bold: true, color: { argb: 'FF1E293B' } };
-                    rowTotal.getCell(2).font = { name: 'Noto Sans', bold: true, color: { argb: 'FF1E293B' } };
-                    
-                    // ✅ ຊື່ຊໍ້າ ແຕ່ເຂົ້າຮ່ວມຕ່າງສະຖານທີ່ (Valid) ➔ ✅ Duplicate Name but Different Event Location (Valid):
-                    const rowValidMulti = wsResult.addRow(["✅ Duplicate Name but Different Event Location (Valid):", `${validMultiCount} Participants`]); // ແຖວທີ 4
-                    rowValidMulti.getCell(1).font = { name: 'Noto Sans', bold: true, color: { argb: 'FF006100' } };
-                    rowValidMulti.getCell(2).font = { name: 'Noto Sans', bold: true, color: { argb: 'FF006100' } };
-                    rowValidMulti.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6EFCE' } };
-                    rowValidMulti.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6EFCE' } };
+                    wsResult.getCell('A4').value = "✅ Duplicate Name but Different Event Location (Valid):";
+                    wsResult.getCell('A4').font = { name: 'Noto Sans', bold: true, color: { argb: 'FF006100' } };
+                    wsResult.getCell('A4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6EFCE' } };
+                    wsResult.getCell('B4').value = `${validMultiCount} Participants`;
+                    wsResult.getCell('B4').font = { name: 'Noto Sans', bold: true, color: { argb: 'FF006100' } };
+                    wsResult.getCell('B4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6EFCE' } };
 
-                    // ❌ ຂໍ້ມູນຊໍ້າຊ້ອນ (Error - ກິດຈະກໍາດຽວກັນ) ➔ ❌ Duplicate Registration (Error - Same Activity):
-                    const rowErrorDup = wsResult.addRow(["❌ Duplicate Registration (Error - Same Activity):", `${actualErrors} Locations`]); // ແຖວທີ 5
-                    rowErrorDup.getCell(1).font = { name: 'Noto Sans', bold: true, color: { argb: 'FF9C0006' } };
-                    rowErrorDup.getCell(2).font = { name: 'Noto Sans', bold: true, color: { argb: 'FF9C0006' } };
-                    rowErrorDup.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
-                    rowErrorDup.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
+                    wsResult.getCell('A5').value = "❌ Duplicate Registration (Error - Same Activity):";
+                    wsResult.getCell('A5').font = { name: 'Noto Sans', bold: true, color: { argb: 'FF9C0006' } };
+                    wsResult.getCell('A5').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
+                    wsResult.getCell('B5').value = `${actualErrors} Locations`;
+                    wsResult.getCell('B5').font = { name: 'Noto Sans', bold: true, color: { argb: 'FF9C0006' } };
+                    wsResult.getCell('B5').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
 
-                    // ℹ️ ຊື່ບໍ່ຊໍ້າກັນ (Valid Single) ➔ ℹ️ Unique Names (Valid Single):
-                    const rowValidSingle = wsResult.addRow(["ℹ️ Unique Names (Valid Single):", `${totalValidSingle} Participants`]); // ແຖວທີ 6
-                    rowValidSingle.getCell(1).font = { name: 'Noto Sans', bold: true, color: { argb: 'FF475569' } };
-                    rowValidSingle.getCell(2).font = { name: 'Noto Sans', bold: true, color: { argb: 'FF475569' } };
+                    wsResult.getCell('A6').value = "ℹ️ Unique Names (Valid Single):";
+                    wsResult.getCell('A6').font = { name: 'Noto Sans', bold: true, color: { argb: 'FF475569' } };
+                    wsResult.getCell('B6').value = `${totalValidSingle} Participants`;
+                    wsResult.getCell('B6').font = { name: 'Noto Sans', bold: true, color: { argb: 'FF475569' } };
 
-                    wsResult.addRow([]); // ແຖວທີ 7 (ຫວ່າງ)
-                    
-                    // ຂໍ້ມູນທີ່ຜ່ານການກວດສອບແລ້ວ (Audited Data Table) ➔ Audited Data Table
-                    const rTableTitle = wsResult.addRow(["Audited Data Table"]); // ແຖວທີ 8
-                    rTableTitle.getCell(1).font = { name: 'Noto Sans', size: 12, bold: true, color: { argb: 'FF0D9488' } };
-                    wsResult.addRow([]); // ແຖວທີ 9 (ຫວ່າງ)
+                    // ຫົວຂໍ້ຕາຕະລາງ
+                    wsResult.getCell('A8').value = "Audited Data Table";
+                    wsResult.getCell('A8').font = { name: 'Noto Sans', size: 12, bold: true, color: { argb: 'FF0D9488' } };
 
-                    // ເລີ່ມສ້າງ Table ສຳເນົາຂໍ້ມູນ ໄວ້ຕັ້ງແຕ່ແຖວທີ 10 ເປັນຕົ້ນໄປ
+                    // ເລີ່ມສ້າງຕາຕະລາງຂໍ້ມູນແບບກຳນົດສີເອງ (Zebra Range Table) ຕັ້ງແຕ່ແຖວທີ 10 ເປັນຕົ້ນໄປ
                     const tableStartRow = 10;
                     if (finalData.length > 0) {
-                        wsResult.addTable({
-                            name: 'Table_Result',
-                            ref: `A${tableStartRow}`,
-                            headerRow: true,
-                            style: {
-                                theme: 'TableStyleMedium2',
-                                showRowStripes: true,
-                            },
-                            columns: columns,
-                            rows: rows
+                        // 1. ສ້າງ Header Row (ແຖວຫົວຂໍ້ຕາຕະລາງ)
+                        const headerRow = wsResult.getRow(tableStartRow);
+                        headers.forEach((h, i) => {
+                            const cell = headerRow.getCell(i + 1);
+                            cell.value = sanitizeColumnName(h || `Column_${i+1}`, i);
+                            cell.fill = {
+                                type: 'pattern',
+                                pattern: 'solid',
+                                fgColor: { argb: 'FF2F5597' } // ພື້ນຫຼັງສີຟ້າເຂັ້ມ (Table Header)
+                            };
+                            cell.font = {
+                                name: 'Noto Sans',
+                                color: { argb: 'FFFFFFFF' }, // ໂຕໜັງສືສີຂາວ
+                                bold: true,
+                                size: 10
+                            };
+                            // ໃສ່ເສັ້ນຂອບລຸ່ມຂອງ Header
+                            cell.border = {
+                                bottom: { style: 'medium', color: { argb: 'FFFFFFFF' } }
+                            };
                         });
 
-                        const validationColIndex = headers.findIndex(h => h === 'Auditor Validation');
-                        const findnameIndex = headers.findIndex(h => h && h.trim().toLowerCase() === 'findname');
+                        // 2. ສ້າງ Data Rows (ແຖວຂໍ້ມູນ)
+                        finalData.forEach((rowObj, rowIndex) => {
+                            const rowNum = tableStartRow + 1 + rowIndex;
+                            const currRow = wsResult.getRow(rowNum);
+                            
+                            headers.forEach((h, colIndex) => {
+                                const cell = currRow.getCell(colIndex + 1);
+                                const val = rowObj[h];
+                                cell.value = (val === undefined || val === null) ? "" : val;
 
-                        // ທາສີພື້ນຫຼັງໃຫ້ກັບຕາຕະລາງໃນ Sheet Result ໂດຍກົງ (ເລີ່ມກວດແຖວທີ 11)
-                        wsResult.eachRow((row, rowNum) => {
-                            if (rowNum > tableStartRow) { // ພາຍໃຕ້ຫົວຕາຕະລາງ
-                                if (validationColIndex !== -1) {
-                                    const cell = row.getCell(validationColIndex + 1);
-                                    const val = cell.value ? cell.value.toString() : "";
-                                    if (val.includes("Error")) {
+                                // ກຳນົດຟອນພາສາລາວເປັນຄ່າເລີ່ມຕົ້ນ
+                                cell.font = { name: 'Noto Sans Lao', size: 10 };
+
+                                // ໃສ່ສີສະລັບແຖວ (Zebra Striping)
+                                if (rowIndex % 2 === 1) {
+                                    cell.fill = {
+                                        type: 'pattern',
+                                        pattern: 'solid',
+                                        fgColor: { argb: 'FFF2F2F2' } // ສີເທົາອ່ອນຫຼາຍ
+                                    };
+                                }
+
+                                // ໃສ່ເສັ້ນຂອບບາງໆໃຫ້ກັບແຕ່ລະຫ້ອງ ເພື່ອໃຫ້ເປັນຕາຕະລາງທີ່ຊັດເຈນ
+                                cell.border = {
+                                    top: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+                                    bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+                                    left: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+                                    right: { style: 'thin', color: { argb: 'FFE0E0E0' } }
+                                };
+
+                                // ກວດສອບ ແລະ ໃສ່ສີພື້ນຫຼັງໃຫ້ກັບ Auditor Validation
+                                if (h === 'Auditor Validation') {
+                                    const valStr = (val || "").toString();
+                                    if (valStr.includes("Error")) {
                                         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
                                         cell.font = { color: { argb: 'FF9C0006' }, bold: true, name: 'Noto Sans Lao' };
-                                    } else if (val.includes("Valid")) {
+                                    } else if (valStr.includes("Valid")) {
                                         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6EFCE' } };
                                         cell.font = { color: { argb: 'FF006100' }, name: 'Noto Sans Lao' };
                                     }
                                 }
-                                if (findnameIndex !== -1) {
-                                    const cell = row.getCell(findnameIndex + 1);
-                                    const val = cell.value ? cell.value.toString() : "";
-                                    if (val && findnameGroups[val] && findnameGroups[val].length > 1) {
+
+                                // ກວດສອບ ແລະ ໃສ່ສີພື້ນຫຼັງໃຫ້ກັບ Findname ທີ່ມີຄ່າຊໍ້າກັນ
+                                if (h && h.trim().toLowerCase() === 'findname') {
+                                    const valStr = (val || "").toString();
+                                    if (valStr && findnameGroups[valStr] && findnameGroups[valStr].length > 1) {
                                         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
                                         cell.font = { color: { argb: 'FF9C0006' }, bold: true, name: 'Noto Sans Lao' };
                                     }
                                 }
-                            }
+                            });
                         });
 
-                        // ຕັ້ງຄວາມກວ້າງຖັນໃຫ້ສວຍງາມໃນ Sheet Result
+                        // ຕັ້ງຄວາມກວ້າງຖັນໃຫ້ສວຍງາມ
                         wsResult.columns.forEach(col => col.width = 20);
-                        wsResult.getColumn(1).width = 45; // ຕັ້ງຖັນທຳອິດໃຫ້ກວ້າງກວ່າໝູ່ ເພື່ອບໍ່ໃຫ້ບົດສະຫຼຸບລົ້ນຫ້ອງ
+                        wsResult.getColumn(1).width = 45; // ຕັ້ງຄໍລຳທຳອິດໃຫ້ກວ້າງ ເພື່ອຮອງຮັບຂໍ້ຄວາມສັງລວມ
                     }
 
                     // ສົ່ງອອກເປັນໄຟລ໌ Excel ທີ່ສົມບູນ
