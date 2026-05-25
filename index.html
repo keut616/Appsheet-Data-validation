@@ -47,7 +47,7 @@
             </h3>
             <ul class="space-y-2 text-gray-700">
                 <li class="flex justify-between border-b border-blue-100 pb-1.5">
-                    <span>🔹 ຈຳນວນຂໍ້ມູນເດືອນ 4/2026 ທັງໝົດ:</span>
+                    <span id="totalRowsLabel">🔹 ຈຳນວນຂໍ້ມູນ Savannakhet:</span>
                     <span id="totalRows" class="font-bold text-blue-800">0 ແຖວ</span>
                 </li>
                 <li class="flex justify-between border-b border-blue-100 pb-1.5 bg-green-50 px-2 py-1 rounded">
@@ -85,6 +85,48 @@
                 }
             }
             return dateStr;
+        }
+
+        // ຟັງຊັນວິເຄາະວັນທີແບບສະຫຼາດ ເພື່ອກວດຈັບວັນ/ເດືອນ/ປີ ໄດ້ຢ່າງຖືກຕ້ອງໃນທຸກຮູບແບບ
+        function parseDate(dateStr) {
+            if (!dateStr) return null;
+            dateStr = dateStr.toString().trim();
+            let parts = [];
+            if (dateStr.includes('-')) {
+                parts = dateStr.split('-');
+            } else if (dateStr.includes('/')) {
+                parts = dateStr.split('/');
+            }
+            if (parts.length === 3) {
+                let p0 = parseInt(parts[0]);
+                let p1 = parseInt(parts[1]);
+                let p2 = parseInt(parts[2]);
+                if (isNaN(p0) || isNaN(p1) || isNaN(p2)) return null;
+
+                let year = p2;
+                let month = p1;
+                let day = p0;
+
+                if (p0 > 1000) { // Format: YYYY-MM-DD
+                    year = p0;
+                    month = p1;
+                    day = p2;
+                } else {
+                    // ກວດສອບຄວາມຖືກຕ້ອງຂອງເດືອນ ແລະ ວັນ
+                    if (p0 > 12) { // ຖ້າຕົວທຳອິດເກີນ 12 ສະແດງວ່າເປັນວັນ (DD/MM/YYYY)
+                        month = p1;
+                        day = p0;
+                    } else if (p1 > 12) { // ຖ້າຕົວທີສອງເກີນ 12 ສະແດງວ່າເປັນວັນ (MM/DD/YYYY)
+                        month = p0;
+                        day = p1;
+                    } else { // ຖ້າທັງສອງນ້ອຍກວ່າ 12 ໃຫ້ອີງຕາມມາດຕະຖານ CSV
+                        month = p0;
+                        day = p1;
+                    }
+                }
+                return { year, month, day };
+            }
+            return null;
         }
 
         // ຟັງຊັນອະນາໄມຊື່ຫົວຄໍລຳເພື່ອປ້ອງກັນ Excel Error ແບບເຂັ້ມງວດທີ່ສຸດ
@@ -146,19 +188,50 @@
                     }
                     originalSheetName = sanitizeSheetName(originalSheetName);
 
-                    // --- ກັ່ນຕອງເດືອນ ---
-                    let currentMonthSheetName = "Apr-2026";
-                    let filteredData = jsonData.filter(row => {
-                        const startDate = (row['Event Start date (Virtual)'] || "").toString();
-                        let isCurrentMonth = startDate.includes('2026') && 
-                                             (startDate.includes('-04-') || startDate.includes('/04/') || 
-                                              startDate.startsWith('4/') || startDate.startsWith('04/'));
-                        return isCurrentMonth;
+                    // --- 1. ກັ່ນຕອງເອົາສະເພາະແຂວງ Savannakhet (ຕາມຄໍລຳ Participant work Province (Virtual)) ---
+                    let provinceFilteredData = jsonData.filter(row => {
+                        const province = (row['Participant work Province (Virtual)'] || "").toString().trim().toLowerCase();
+                        return province === 'savannakhet';
                     });
+
+                    // --- 2. ກວດຫາເດືອນປັດຈຸບັນ (Active Month/Year) ຈາກຄໍລຳ Event End date (Virtual) ---
+                    let maxYear = 0;
+                    let maxMonth = 0;
                     
-                    if(filteredData.length === 0) {
-                        filteredData = jsonData; 
+                    provinceFilteredData.forEach(row => {
+                        const endDateStr = row['Event End date (Virtual)'] || row['Event Start date (Virtual)'] || "";
+                        const parsed = parseDate(endDateStr);
+                        if (parsed) {
+                            if (parsed.year > maxYear) {
+                                maxYear = parsed.year;
+                                maxMonth = parsed.month;
+                            } else if (parsed.year === maxYear && parsed.month > maxMonth) {
+                                maxMonth = parsed.month;
+                            }
+                        }
+                    });
+
+                    // ຖ້າກວດບໍ່ພົບວັນທີໃຫ້ໃຊ້ເດືອນພື້ນຖານ (ເມສາ 2026)
+                    if (maxYear === 0) {
+                        maxYear = 2026;
+                        maxMonth = 4;
                     }
+
+                    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                    const monthFullNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                    
+                    const currentMonthSheetName = `${monthNames[maxMonth - 1]}-${maxYear}`;
+                    const currentMonthFullName = `${monthFullNames[maxMonth - 1]} ${maxYear}`;
+
+                    // --- 3. ລຶບເດືອນກ່ອນໜ້າອອກ (ກັ່ນຕອງຮັກສາສະເພາະເດືອນປັດຈຸບັນຫຼ້າສຸດ) ---
+                    let filteredData = provinceFilteredData.filter(row => {
+                        const endDateStr = row['Event End date (Virtual)'] || row['Event Start date (Virtual)'] || "";
+                        const parsed = parseDate(endDateStr);
+                        if (parsed) {
+                            return parsed.year === maxYear && parsed.month === maxMonth;
+                        }
+                        return false;
+                    });
 
                     // --- ການກວດສອບຊື່ຊໍ້າຕາມເງື່ອນໄຂ Findname ---
                     let findnameGroups = {};
@@ -250,6 +323,7 @@
                     const actualErrors = Math.ceil(errorCount / 2);
                     const totalValidSingle = validSingleCount + otherValidCount;
                     
+                    document.getElementById('totalRowsLabel').innerHTML = `<span>🔹 ຈຳນວນຂໍ້ມູນ Savannakhet ເດືອນ <span class="underline font-bold">${currentMonthSheetName}</span> ທັງໝົດ:</span>`;
                     document.getElementById('totalRows').textContent = finalData.length + " ແຖວ";
                     document.getElementById('validMulti').textContent = validMultiCount + " ຄົນ";
                     document.getElementById('errorDup').textContent = actualErrors + " ບ່ອນ";
@@ -261,12 +335,12 @@
                     // -------------------------------------------------------------
                     const newWb = new ExcelJS.Workbook();
                     
-                    // 1. ສ້າງ Sheet ຕົ້ນສະບັບ (Original)
+                    // 1. ສ້າງ Sheet ຕົ້ນສະບັບ (Original) -> ຂໍ້ມູນດິບຕົ້ນສະບັບຄົບຖ້ວນ
                     const wsOriginal = newWb.addWorksheet(originalSheetName);
                     const rawAoA = XLSX.utils.sheet_to_json(worksheet, {header: 1, raw: false, defval: ""});
                     wsOriginal.addRows(rawAoA);
 
-                    // 2. ສ້າງ Sheet ເດືອນປັດຈຸບັນ (Apr-2026) -> ໂຕນີ້ປອດໄພ 100% ເພາະ Table ຢູ່ແຖວ A1
+                    // 2. ສ້າງ Sheet ເດືອນປັດຈຸບັນ (Dynamic Name) -> ຂໍ້ມູນສະເພາະ Savannakhet ແລະ ຖືກກັ່ນຕອງເດືອນແລ້ວ
                     const wsApr = newWb.addWorksheet(currentMonthSheetName);
                     
                     let columns = [];
@@ -295,9 +369,9 @@
                             return val;
                         }));
 
-                        // ສ້າງ Table ໃນ Sheet "Apr-2026"
+                        // ສ້າງ Table ໃນ Sheet "ເດືອນປັດຈຸບັນ"
                         wsApr.addTable({
-                            name: 'Table_Apr_2026',
+                            name: `Table_${currentMonthSheetName.replace('-', '_')}`,
                             ref: 'A1',
                             headerRow: true,
                             style: {
@@ -308,7 +382,7 @@
                             rows: rows
                         });
 
-                        // ທາສີພື້ນຫຼັງໃຫ້ແຕ່ລະຫ້ອງໂດຍກົງໃນ Sheet "Apr-2026"
+                        // ທາສີພື້ນຫຼັງໃຫ້ແຕ່ລະຫ້ອງໂດຍກົງໃນ Sheet
                         const validationColIndex = headers.findIndex(h => h === 'Auditor Validation');
                         const findnameIndex = headers.findIndex(h => h && h.trim().toLowerCase() === 'findname');
 
@@ -339,20 +413,20 @@
                         wsApr.columns.forEach(col => col.width = 20);
                     }
 
-                    // 3. ສ້າງ Sheet "Result" 
-                    // ປ່ຽນມາໃຊ້ "Custom Range Styling" (ຂຽນລົງ Cell ໂດຍກົງ ແລະ ທາສີດ້ວຍມື) ແທນ addTable
-                    // ວິທີນີ້ຈະງາມຄືເກົ່າ 100% ແຕ່ປອດໄພ ແລະ ບໍ່ເຮັດໃຫ້ Excel ແຈ້ງເຕືອນ Error ອີກເລີຍ!
+                    // 3. ສ້າງ Sheet "Result" -> ຂໍ້ມູນ Savannakhet ພ້ອມບລັອກສະຫຼຸບພາສາອັງກິດດ້ານເທິງ
                     const wsResult = newWb.addWorksheet("Result");
                     
                     // --- ບລັອກສະຫຼຸບຜົນການກວດສອບ (ແຖວທີ 2-6) ---
                     wsResult.getCell('A2').value = "Audit Result Summary";
                     wsResult.getCell('A2').font = { name: 'Noto Sans', size: 16, bold: true, color: { argb: 'FF1E3A8A' } };
                     
-                    wsResult.getCell('A3').value = "🔹 Total Records (April 2026):";
+                    // 🔹 Total Records (Dynamic Month):
+                    wsResult.getCell('A3').value = `🔹 Total Records (${currentMonthFullName}):`;
                     wsResult.getCell('A3').font = { name: 'Noto Sans', bold: true, color: { argb: 'FF1E293B' } };
                     wsResult.getCell('B3').value = `${finalData.length} Rows`;
                     wsResult.getCell('B3').font = { name: 'Noto Sans', bold: true, color: { argb: 'FF1E293B' } };
                     
+                    // ✅ Duplicate Name but Different Event Location (Valid):
                     wsResult.getCell('A4').value = "✅ Duplicate Name but Different Event Location (Valid):";
                     wsResult.getCell('A4').font = { name: 'Noto Sans', bold: true, color: { argb: 'FF006100' } };
                     wsResult.getCell('A4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6EFCE' } };
@@ -360,6 +434,7 @@
                     wsResult.getCell('B4').font = { name: 'Noto Sans', bold: true, color: { argb: 'FF006100' } };
                     wsResult.getCell('B4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6EFCE' } };
 
+                    // ❌ Duplicate Registration (Error - Same Activity):
                     wsResult.getCell('A5').value = "❌ Duplicate Registration (Error - Same Activity):";
                     wsResult.getCell('A5').font = { name: 'Noto Sans', bold: true, color: { argb: 'FF9C0006' } };
                     wsResult.getCell('A5').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
@@ -367,6 +442,7 @@
                     wsResult.getCell('B5').font = { name: 'Noto Sans', bold: true, color: { argb: 'FF9C0006' } };
                     wsResult.getCell('B5').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
 
+                    // ℹ️ Unique Names (Valid Single):
                     wsResult.getCell('A6').value = "ℹ️ Unique Names (Valid Single):";
                     wsResult.getCell('A6').font = { name: 'Noto Sans', bold: true, color: { argb: 'FF475569' } };
                     wsResult.getCell('B6').value = `${totalValidSingle} Participants`;
@@ -395,7 +471,6 @@
                                 bold: true,
                                 size: 10
                             };
-                            // ໃສ່ເສັ້ນຂອບລຸ່ມຂອງ Header
                             cell.border = {
                                 bottom: { style: 'medium', color: { argb: 'FFFFFFFF' } }
                             };
@@ -411,7 +486,6 @@
                                 const val = rowObj[h];
                                 cell.value = (val === undefined || val === null) ? "" : val;
 
-                                // ກຳນົດຟອນພາສາລາວເປັນຄ່າເລີ່ມຕົ້ນ
                                 cell.font = { name: 'Noto Sans Lao', size: 10 };
 
                                 // ໃສ່ສີສະລັບແຖວ (Zebra Striping)
@@ -423,7 +497,6 @@
                                     };
                                 }
 
-                                // ໃສ່ເສັ້ນຂອບບາງໆໃຫ້ກັບແຕ່ລະຫ້ອງ ເພື່ອໃຫ້ເປັນຕາຕະລາງທີ່ຊັດເຈນ
                                 cell.border = {
                                     top: { style: 'thin', color: { argb: 'FFE0E0E0' } },
                                     bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } },
@@ -454,7 +527,6 @@
                             });
                         });
 
-                        // ຕັ້ງຄວາມກວ້າງຖັນໃຫ້ສວຍງາມ
                         wsResult.columns.forEach(col => col.width = 20);
                         wsResult.getColumn(1).width = 45; // ຕັ້ງຄໍລຳທຳອິດໃຫ້ກວ້າງ ເພື່ອຮອງຮັບຂໍ້ຄວາມສັງລວມ
                     }
